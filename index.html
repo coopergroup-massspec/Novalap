@@ -100,6 +100,20 @@
     button:hover { background: var(--panel); }
     .primary { background: var(--accent); color: #fff; }
     .primary:hover { filter: brightness(1.1); }
+
+    /* Style anchor elements inside .btns to look like primary buttons */
+    .btns a.primary {
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      text-decoration: none;
+      display: inline-block;
+      font: inherit;
+    }
+    .btns a.primary:hover {
+      filter: brightness(1.1);
+    }
     .pill {
       display: inline-block;
       border-radius: 999px;
@@ -124,19 +138,6 @@
       padding: 10px 8px;
       text-align: left;
       vertical-align: top;
-    }
-
-    /* Ensure cards take up the full available width on narrow screens and avoid
-       inconsistent widths between different panes. */
-    .card {
-      width: 100%;
-      max-width: 100%;
-    }
-
-    /* Allow horizontal scrolling for wide tables on small devices to prevent
-       overflow and maintain consistent card widths. */
-    #tableWrap {
-      overflow-x: auto;
     }
     th { color: var(--accent); font-weight: 700; }
     .mono { font-family: Consolas, Menlo, Monaco, monospace; }
@@ -254,13 +255,13 @@
           <button onclick="downloadCsv()">Export pair table (CSV)</button>
         </div>
 
-        <!--<h3 style="margin-top:18px;">Method</h3>
+        <h3 style="margin-top:18px;">Method</h3>
         <div class="formula">Overlap condition for a fixed precursor m/z window: r₁ / z₁ = r₂ / z₂</div>
         <p class="small">
           For a pair of charge states z₁ and z₂, the first exact overlap occurs at reductions
           r₁ = z₁ / gcd(z₁,z₂) and r₂ = z₂ / gcd(z₁,z₂). The window-wide safe limit is the smallest
           pair threshold minus 1.
-        </p> -->
+        </p>
       </div>
 
       <div class="card">
@@ -289,6 +290,8 @@
       <ul id="mwTargetList" class="small" style="margin:4px 0 0; padding-left:16px;"></ul>
       <div class="btns">
         <button class="primary" id="exportMwCsvBtn" onclick="exportMwCsv()">Export MS<sup>3</sup> targets (CSV)</button>
+        <!-- Button to download the spsMS3 template.  The file SPStemplate.meth is served from the repository root. -->
+        <a class="primary" href="SPStemplate.meth" download>Download spsMS<sup>3</sup> template</a>
       </div>
     </div>
 
@@ -838,15 +841,7 @@
           textfont: { color: textColour, size: 10 }
         }
       ];
-      // Use a custom config to prevent the mode bar from overlaying data on small screens.
-      // Hiding the mode bar avoids Plotly's toolbar covering markers in mobile view.  Users
-      // can still interact with the chart via pinch/zoom gestures.
-      const config = {
-        responsive: true,
-        displayModeBar: false,
-        displaylogo: false
-      };
-      Plotly.newPlot('spectrumChart', traces, layout, config);
+      Plotly.newPlot('spectrumChart', traces, layout, { responsive: true });
     }
 
     function renderTable(rows, maxReductions) {
@@ -886,7 +881,7 @@
       modeChanged();
       document.getElementById('avgCharge').value = '10';
       document.getElementById('plusMinus').value = '2';
-      document.getElementById('maxReductions').value = '5';
+      document.getElementById('maxReductions').value = '12';
       calculate();
     }
 
