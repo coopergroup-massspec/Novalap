@@ -321,7 +321,7 @@
             <option value="epd">EPD (negative ions)</option>
           </select>
         </div>
-        <p id="modeFormula" class="formula">[M+nH]<sup>n+</sup> + xA<sup>-</sup> = [M+(n-x)H]<sup>(n-x)+</sup> + xAH</p>
+        <p id="modeFormula" class="formula" style="display:none;"></p>
         <!-- Precursor m/z (isolation centre) placed first in inputs pane -->
 
         <div class="row">
@@ -492,7 +492,7 @@
     }
 
     function precursorNeutralMass(precursorMz, z, mode = getReductionMode()) {
-      if (mode === 'epd') return precursorMz * z + z * PROTON_MASS;
+      if (mode === 'epd') return precursorMz * z + z * ELECTRON_MASS;
       return precursorMz * z - z * PROTON_MASS;
     }
 
@@ -500,9 +500,10 @@
       const q = z - reductions;
       if (q < 1) return NaN;
       if (mode === 'epd') {
-        return (precursorIonMass(precursorMz, z, mode) - reductions * ELECTRON_MASS) / q;
+        const neutralMass = precursorNeutralMass(precursorMz, z, mode);
+        return (neutralMass - z * PROTON_MASS - reductions * ELECTRON_MASS) / q;
       }
-      return (precursorIonMass(precursorMz, z, mode) + q * PROTON_MASS) / q;
+      return (precursorMz * z - reductions * PROTON_MASS) / q;
     }
 
     function modeName(mode = getReductionMode()) {
@@ -1315,9 +1316,8 @@
       const mode = getReductionMode();
       const formula = document.getElementById('modeFormula');
       if (formula) {
-        formula.innerHTML = mode === 'epd'
-          ? '[M-nH]<sup>n-</sup> - ye<sup>-</sup> = [M-nH]<sup>(n-y)-</sup>'
-          : '[M+nH]<sup>n+</sup> + xA<sup>-</sup> = [M+(n-x)H]<sup>(n-x)+</sup> + xAH';
+        formula.innerHTML = '';
+        formula.style.display = 'none';
       }
       calculate();
     }
