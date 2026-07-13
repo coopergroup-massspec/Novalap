@@ -486,24 +486,18 @@
       return `${chargeLabel(z, mode)}→${chargeLabel(q, mode)}`;
     }
 
-    function precursorIonMass(precursorMz, z, mode = getReductionMode()) {
-      if (mode === 'epd') return precursorMz * z;
-      return precursorMz * z - z * PROTON_MASS;
-    }
-
     function precursorNeutralMass(precursorMz, z, mode = getReductionMode()) {
-      if (mode === 'epd') return precursorMz * z + z * ELECTRON_MASS;
-      return precursorMz * z - z * PROTON_MASS;
+      // PTCR: molecular weight = (m/z × z) - (z × proton mass)
+      // EPD: molecular weight = (m/z × z) + (z × proton mass)
+      const signedProtonMass = mode === 'epd' ? PROTON_MASS : -PROTON_MASS;
+      return precursorMz * z + z * signedProtonMass;
     }
 
     function productMz(precursorMz, z, reductions, mode = getReductionMode()) {
       const q = z - reductions;
       if (q < 1) return NaN;
-      if (mode === 'epd') {
-        const neutralMass = precursorNeutralMass(precursorMz, z, mode);
-        return (neutralMass - z * PROTON_MASS - reductions * ELECTRON_MASS) / q;
-      }
-      return (precursorMz * z - reductions * PROTON_MASS) / q;
+      const reductionMass = mode === 'epd' ? ELECTRON_MASS : PROTON_MASS;
+      return (precursorMz * z - reductions * reductionMass) / q;
     }
 
     function modeName(mode = getReductionMode()) {
