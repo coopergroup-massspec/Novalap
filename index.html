@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novalap charge-reduction calculator</title>
+  <title>Novalap Mode selection charge-reduction calculator</title>
   <!-- Add favicon using the Novalap logo -->
   <link rel="icon" type="image/png" href="Novalap_logo_final.png" />
   <style>
@@ -297,8 +297,8 @@
       <div class="brand">
         <img class="brand-logo" src="Novalap_logo_final.png" alt="Novalap logo">
         <div class="brand-copy">
-          <h1 style="margin:0;">Novalap PTCR Calculator</h1>
-          <p class="brand-kicker">Predict overlap-free charge reduced product ions for SPS MS<sup>3</sup></p>
+          <h1 style="margin:0;">Novalap Mode selection Calculator</h1>
+          <p class="brand-kicker">Predict overlap-free PTCR or EPD charge reduced product ions for SPS MS<sup>3</sup></p>
         </div>
       </div>
       <button id="themeToggle" style="margin-top:8px;">Toggle dark/light</button>
@@ -314,11 +314,19 @@
     <div class="grid">
       <div class="card">
         <h2>Inputs</h2>
+        <div class="row">
+          <label for="reductionMode">Charge reduction mode</label>
+          <select id="reductionMode">
+            <option value="ptcr" selected>PTCR (positive ions)</option>
+            <option value="epd">EPD (negative ions)</option>
+          </select>
+        </div>
+        <p id="modeFormula" class="formula" style="display:none;"></p>
         <!-- Precursor m/z (isolation centre) placed first in inputs pane -->
 
         <div class="row">
           <label for="precursorMz">Precursor m/z (isolation centre)</label>
-          <input id="precursorMz" type="number" min="50" step="0.1" value="2901" />
+          <input id="precursorMz" type="number" min="50" step="0.1" value="2910" />
         </div>
 
         <div class="row">
@@ -403,7 +411,7 @@
 		MS<sup>3</sup> targets up to the first exact overlap are included.<br />
 		If using the MS<sup>3</sup> isolation width, MS<sup>3</sup> targets with isolation overlap are marked in <b>red</b> and are not exported to the list. Reduce the isolation width to include them.<br />
 		Exported tables can be imported into the Method Editor (Thermo) targeted mass filter.
-        <!--Values are calculated as (precursor m/z × charge − charge × 1.0073) in kDa.-->
+        <!--Values are calculated from the selected PTCR/EPD precursor chemistry.-->
       </p>
       <div class="row">
         <label for="mwSelect">Precursor mass</label>
@@ -462,6 +470,39 @@
 
     // store per-charge safe limits for exporting and highlighting
     let chargeSafeLimits = {};
+    const PROTON_MASS = 1.007276466812;
+    const ELECTRON_MASS = 0.000548579909065;
+
+    function getReductionMode() {
+      const el = document.getElementById('reductionMode');
+      return el ? el.value : 'ptcr';
+    }
+
+    function chargeLabel(z, mode = getReductionMode()) {
+      return `${z}${mode === 'epd' ? '-' : '+'}`;
+    }
+
+    function transitionLabel(z, q, mode = getReductionMode()) {
+      return `${chargeLabel(z, mode)}→${chargeLabel(q, mode)}`;
+    }
+
+    function precursorNeutralMass(precursorMz, z, mode = getReductionMode()) {
+      // PTCR: molecular weight = (m/z × z) - (z × proton mass)
+      // EPD: molecular weight = (m/z × z) + (z × proton mass)
+      const signedProtonMass = mode === 'epd' ? PROTON_MASS : -PROTON_MASS;
+      return precursorMz * z + z * signedProtonMass;
+    }
+
+    function productMz(precursorMz, z, reductions, mode = getReductionMode()) {
+      const q = z - reductions;
+      if (q < 1) return NaN;
+      const reductionMass = mode === 'epd' ? ELECTRON_MASS : PROTON_MASS;
+      return (precursorMz * z - reductions * reductionMass) / q;
+    }
+
+    function modeName(mode = getReductionMode()) {
+      return mode === 'epd' ? 'EPD' : 'PTCR';
+    }
 
     function gcd(a, b) {
       a = Math.abs(a); b = Math.abs(b);
@@ -509,6 +550,7 @@
     function calculate() {
       try {
         const charges = parseCharges();
+        const reductionMode = getReductionMode();
         const maxReductions = Math.max(1, parseInt(document.getElementById('maxReductions').value, 10) || 12);
         const precursorMzInput = parseFloat(document.getElementById('precursorMz').value);
         if (isNaN(precursorMzInput) || precursorMzInput <= 0) {
@@ -574,7 +616,7 @@
           </p>
           <p><b>First-overlap pair(s):</b></p>
           <ul>
-            ${earliestPairs.map(r => `<li><span class="mono">${r.z1}+ & ${r.z2}+</span> with first overlap at <b>${r.threshold}</b> reductions (r₁=${r.r1}, r₂=${r.r2})</li>`).join('')}
+            ${earliestPairs.map(r => `<li><span class="mono">${chargeLabel(r.z1, reductionMode)} & ${chargeLabel(r.z2, reductionMode)}</span> with first overlap at <b>${r.threshold}</b> reductions (r₁=${r.r1}, r₂=${r.r2})</li>`).join('')}
           </ul>
         `;
 
@@ -595,10 +637,10 @@
           mwSelect.appendChild(allOption);
           // compute kDa weights for each charge state and append to dropdown
           charges.forEach(z => {
-            const mw = (precursorMzInput * z - z * 1.0073) / 1000;
+            const mw = precursorNeutralMass(precursorMzInput, z, reductionMode) / 1000;
             const option = document.createElement('option');
             option.value = String(z);
-            option.textContent = `${mw.toFixed(2)} kDa (${z}+)`;
+            option.textContent = `${mw.toFixed(2)} kDa (${chargeLabel(z, reductionMode)})`;
             mwSelect.appendChild(option);
           });
           // select "All" by default
@@ -674,7 +716,7 @@
      * and maximum number of reduction events.
      */
     function computeSpectrum(precursorMz, charges, maxReductions, isoMode = false, ms2Width = 5, ms3Width = 10) {
-      const H = 1.007276466812; // mass of a proton (Da)
+      const mode = getReductionMode();
       // width of the isolation window in m/z units (FWHM assumed).  When isolation mode is enabled, this
       // comes from user input for the MS2 isolation width; otherwise use the default 5 m/z.
       const widthIsolation = isoMode ? ms2Width : 5;
@@ -687,12 +729,11 @@
 
       // For each charge state, compute its own neutral mass and generate all possible charge-reduced products
       charges.forEach(z => {
-        const M_z = precursorMz * z - z * H;
         // Skip r = 0 to avoid unreacted precursor peaks at the isolation centre
         for (let r = 1; r <= maxReductions; r++) {
           const q = z - r;
           if (q < 1) break;
-          const mz = (M_z + q * H) / q;
+          const mz = productMz(precursorMz, z, r, mode);
           // Do not plot peaks that fall below the precursor m/z
           if (mz < precursorMz) continue;
           const key = mz.toFixed(6); // group nearly identical m/z values
@@ -820,8 +861,8 @@
         const ms2 = group.ms2 || false;
         const ms3 = group.ms3 || false;
         const mzLabel = group.mz.toFixed(1);
-        // Build list of mappings "z+→q+" for each contributing charge state
-        const mappings = group.info.map(ci => `${ci.z}+→${ci.q}+`);
+        // Build list of precursor-to-product charge mappings for each contributing charge state
+        const mappings = group.info.map(ci => transitionLabel(ci.z, ci.q, mode));
         const hoverMappings = mappings.join(', ');
         // Choose a short label to display on the chart to minimise clutter
         let shortLabel;
@@ -1001,8 +1042,8 @@
           <tbody>
             ${rows.map(r => `
               <tr>
-                <td>${r.z1}+</td>
-                <td>${r.z2}+</td>
+                <td>${chargeLabel(r.z1)}</td>
+                <td>${chargeLabel(r.z2)}</td>
                 <td>${r.gcd}</td>
                 <td class="mono">r₁=${r.r1}, r₂=${r.r2}</td>
                 <td><b>${r.threshold}</b></td>
@@ -1017,11 +1058,15 @@
     }
 
     function loadExample() {
+      document.getElementById('reductionMode').value = 'ptcr';
+      reductionModeChanged(); 
+	  document.getElementById('number').value = '2910';
+      modeChanged();
       document.getElementById('mode').value = 'range';
       modeChanged();
       document.getElementById('avgCharge').value = '10';
       document.getElementById('plusMinus').value = '2';
-      document.getElementById('maxReductions').value = '12';
+      document.getElementById('maxReductions').value = '5';
       calculate();
     }
 
@@ -1038,7 +1083,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'novalap_ptcr_overlap_pairs.csv';
+      a.download = `novalap_${modeName().toLowerCase()}_overlap_pairs.csv`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -1051,7 +1096,7 @@
       const select = document.getElementById('mwSelect');
       if (!select || select.options.length === 0) return;
       const val = select.value;
-      const H = 1.007276466812;
+      const reductionMode = getReductionMode();
       let lines = [];
       let filenameSuffix = '';
       // Determine if isolation mode is active for filtering overlaps
@@ -1078,13 +1123,12 @@
         charges.forEach(z => {
           const safe = chargeSafeLimits[z] || 0;
           if (safe < 1) return;
-          const mw = (currentPrecursorMz * z - z * 1.0073) / 1000;
-          const label = `${mw.toFixed(2)} kDa (${z}+)`;
-          const M_z = currentPrecursorMz * z - z * H;
+          const mw = precursorNeutralMass(currentPrecursorMz, z, reductionMode) / 1000;
+          const label = `${mw.toFixed(2)} kDa (${chargeLabel(z, reductionMode)})`;
           for (let r = 1; r <= safe; r++) {
             const q = z - r;
             if (q < 1) break;
-            const mz = (M_z + q * H) / q;
+            const mz = productMz(currentPrecursorMz, z, r, reductionMode);
             // Skip products flagged as exact overlaps or MS3 overlap when isolation mode is active
             const mzKey = mz.toFixed(6);
             if (overlapSet.has(mzKey) || (isoOn && ms3Set.has(mzKey))) continue;
@@ -1103,11 +1147,10 @@
         const label = select.options[select.selectedIndex].text;
         const mwMatch = label.match(/([0-9]+\.[0-9]+)/);
         const mwText = mwMatch ? mwMatch[1] : String(z);
-        const M_z = currentPrecursorMz * z - z * H;
         for (let r = 1; r <= safe; r++) {
           const q = z - r;
           if (q < 1) break;
-          const mz = (M_z + q * H) / q;
+          const mz = productMz(currentPrecursorMz, z, r, reductionMode);
           // Skip products flagged as exact overlaps or MS3 overlap when isolation mode is active
           const mzKey = mz.toFixed(6);
           if (overlapSet.has(mzKey) || (isoOn && ms3Set.has(mzKey))) continue;
@@ -1125,7 +1168,7 @@
       const a = document.createElement('a');
       a.href = url;
       // Build filename with suffix
-      a.download = `novalap_ptcr_mass_products_${filenameSuffix}.csv`;
+      a.download = `novalap_${modeName(reductionMode).toLowerCase()}_mass_products_${filenameSuffix}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -1208,18 +1251,17 @@
         });
       }
       // Compute the neutral mass for this charge state
-      const H = 1.007276466812;
-      const M_z = currentPrecursorMz * z - z * H;
+      const reductionMode = getReductionMode();
       let exportedCount = 0;
       let listHtml = '';
       for (let r = 1; r <= safe; r++) {
         const q = z - r;
         if (q < 1) break;
-        const mz = (M_z + q * H) / q;
+        const mz = productMz(currentPrecursorMz, z, r, reductionMode);
         const mzStr6 = mz.toFixed(6);
         const mzStr4 = mz.toFixed(4);
         // Format mapping
-        const mapping = `${z}+→${q}+`;
+        const mapping = transitionLabel(z, q, reductionMode);
         // Exclude if this m/z is flagged as an overlap by any charge or if it's within MS3 overlap
         if (overlapSet.has(mzStr6) || (isoOn && ms3Set.has(mzStr6))) {
           listHtml += `<li><span class="bad">${mzStr4} (${mapping})</span></li>`;
@@ -1233,9 +1275,9 @@
       const firstR = safe + 1;
       const firstQ = z - firstR;
       if (firstQ >= 1) {
-        const firstMz = (M_z + firstQ * H) / firstQ;
+        const firstMz = productMz(currentPrecursorMz, z, firstR, reductionMode);
         const firstMzStr4 = firstMz.toFixed(4);
-        const firstMapping = `${z}+→${firstQ}+`;
+        const firstMapping = transitionLabel(z, firstQ, reductionMode);
         // Only append if this first overlap m/z is above the precursor and not already listed
         const firstKey = firstMz.toFixed(6);
         if (firstMz > 0 && !listHtml.includes(firstMzStr4)) {
@@ -1266,7 +1308,18 @@
       });
     }
 
+    function reductionModeChanged() {
+      const mode = getReductionMode();
+      const formula = document.getElementById('modeFormula');
+      if (formula) {
+        formula.innerHTML = '';
+        formula.style.display = 'none';
+      }
+      calculate();
+    }
+
     document.getElementById('mode').addEventListener('change', modeChanged);
+    document.getElementById('reductionMode').addEventListener('change', reductionModeChanged);
     // Attach change listener to the precursor mass select to handle highlighting
     const mwDropdownEl = document.getElementById('mwSelect');
     if (mwDropdownEl) {
